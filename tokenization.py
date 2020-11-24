@@ -300,9 +300,10 @@ class BasicTokenizer(object):
 class WordpieceTokenizer(object):
   """Runs WordPiece tokenziation."""
 
-  def __init__(self, vocab, unk_token="[UNK]", max_input_chars_per_word=200):
+  def __init__(self, vocab, unk_token="[UNK]", num_token="[NUM]", max_input_chars_per_word=200):
     self.vocab = vocab
     self.unk_token = unk_token
+    self.num_token = num_token
     self.max_input_chars_per_word = max_input_chars_per_word
 
   def tokenize(self, text):
@@ -342,6 +343,9 @@ class WordpieceTokenizer(object):
           substr = "".join(chars[start:end])
           if start > 0:
             substr = "##" + substr
+          if _is_numeric(substr):
+            cur_substr = self.num_token
+            break
           if substr in self.vocab:
             cur_substr = substr
             break
@@ -397,3 +401,9 @@ def _is_punctuation(char):
   if cat.startswith("P"):
     return True
   return False
+
+def _is_numeric(char):
+  return char.isdigit()
+
+def _is_title(char):
+  return char.isdigit()

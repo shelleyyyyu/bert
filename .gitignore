@@ -114,3 +114,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+.idea
+chinese_bert_chinese_wwm_L-12_H-768_A-12
+data
+model_output
+uncased_L-12_H-768_A-12
