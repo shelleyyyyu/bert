@@ -26,6 +26,7 @@ import modeling
 import optimization
 import tokenization
 import tensorflow as tf
+from sklearn.metrics import accuracy_score, roc_auc_score
 
 flags = tf.flags
 
@@ -280,7 +281,8 @@ class DocProcessor(DataProcessor):
       text_a = tokenization.convert_to_unicode(line[0])
       text_b = [tokenization.convert_to_unicode(line[1]), tokenization.convert_to_unicode(line[2])]
       if set_type == "test":
-        label = "0"
+        #label = "0"
+        label = tokenization.convert_to_unicode(line[3])
       else:
         label = tokenization.convert_to_unicode(line[3])
       examples.append(
@@ -627,9 +629,21 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
           eval_metrics=eval_metrics,
           scaffold_fn=scaffold_fn)
     else:
+      def metric_fn(label_ids, logits, is_real_example):
+        predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
+        accuracy = tf.metrics.accuracy(
+            labels=label_ids, predictions=predictions, weights=is_real_example)
+        return {
+            "predict_accuracy": accuracy,
+        }
+
+      predict_metrics = (metric_fn,
+                      [label_ids, logits, is_real_example])
+
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
-          predictions={"probabilities": probabilities},
+          predictions={"probabilities": probabilities, "truth_labels": label_ids},
+          eval_metrics=predict_metrics,
           scaffold_fn=scaffold_fn)
     return output_spec
 
@@ -882,23 +896,39 @@ def main(_):
         drop_remainder=predict_drop_remainder)
 
     result = estimator.predict(input_fn=predict_input_fn)
-
     output_predict_file = os.path.join(FLAGS.output_dir, "test_results.tsv")
+
+    truth_label_list = []
+    pred_label_list = []
+    pred_prob_list = []
     with tf.gfile.GFile(output_predict_file, "w") as writer:
       num_written_lines = 0
       tf.logging.info("***** Predict results *****")
       for (i, prediction) in enumerate(result):
         probabilities = prediction["probabilities"]
+        truth_labels = prediction["truth_labels"]
+        pred_label_list.append(1) if probabilities[1] > 0.5 else pred_label_list.append(0)
+        truth_label_list.append(int(truth_labels))
+        pred_prob_list.append(probabilities[1])
         if i >= num_actual_predict_examples:
           break
-        output_line = "\t".join(
-            str(class_probability)
-            for class_probability in probabilities) + "\n"
+        #output_line = "\t".join(
+        #    str(class_probability)
+        #    for class_probability in probabilities) + "\n"
+        output_line = predict_examples[i].text_a + '\t' + predict_examples[i].text_b[0] + '\t' + predict_examples[i].text_b[1] + '\t' + str(truth_labels) + '\t' + str(probabilities[-1]) + '\n'
         writer.write(output_line)
         num_written_lines += 1
     assert num_written_lines == num_actual_predict_examples
 
+    ###metrics
+    metric = estimator.evaluate(input_fn=predict_input_fn)
 
+    tf.logging.info("***** Prediction Results *****")
+    for key in sorted(metric.keys()):
+        tf.logging.info("  %s = %s", key, str(metric[key]))
+    tf.logging.info("  %s = %.4f", 'Accuracy', accuracy_score(truth_label_list, pred_label_list))
+    tf.logging.info("  %s = %.4f", 'AUC', roc_auc_score(truth_label_list, pred_prob_list))
+    
 if __name__ == "__main__":
   flags.mark_flag_as_required("data_dir")
   flags.mark_flag_as_required("task_name")
