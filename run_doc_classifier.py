@@ -274,7 +274,7 @@ class DocProcessor(DataProcessor):
   def _create_examples(self, lines, set_type):
     """Creates examples for the training and dev sets."""
     examples = []
-    for (i, line) in enumerate(lines[:100]):
+    for (i, line) in enumerate(lines):
       #if i == 0:
       #  continue
       guid = "%s-%s" % (set_type, i)
@@ -928,7 +928,7 @@ def main(_):
         tf.logging.info("  %s = %s", key, str(metric[key]))
     tf.logging.info("  %s = %.4f", 'Accuracy', accuracy_score(truth_label_list, pred_label_list))
     tf.logging.info("  %s = %.4f", 'AUC', roc_auc_score(truth_label_list, pred_prob_list))
-    
+
 if __name__ == "__main__":
   flags.mark_flag_as_required("data_dir")
   flags.mark_flag_as_required("task_name")
